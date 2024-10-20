@@ -1,4 +1,4 @@
-#include <"LFSR.hpp"
+#include "LFSR.hpp"
 #include <SFML/Graphics.hpp>
 #include <SFML/System.hpp>
 #include <SFML/Window.hpp>
@@ -7,131 +7,181 @@
 #include <iostream>
 #include <string>
 
-sf::Image transform_image(sf::Image, LFSR)
+sf::Image transform_image(sf::Image img, LFSR lsfr, const std::string &binary_message);
+std::string convert_to_binary(const std::string &input);
+std::string extract_message_from_image(sf::Image img, size_t message_length);
 
-    inline void show_usage() {
-  std::cout << "Invalid arguments usage." << std::endl;
-  std::cout << "------- Usage -------" << std::endl;
-  std::cout << "Example:" << std::endl;
-  std::cout << "PhotoMagic <input file name> <output file name> "
-               "<binary string> <tap number>"
-            << std::endl;
-  std::cout << "Using alpha numeric password:" << std::endl;
-  std::cout << "PhotoMagic <input file name> <output file name> "
-               "-p <password string> <tap number>"
-            << std::endl;
+inline void show_usage() {
+    std::cout << "Invalid arguments usage." << std::endl;
+    std::cout << "------- Usage -------" << std::endl;
+    std::cout << "Example:" << std::endl;
+    std::cout << "PhotoMagic <input file name> <output file name> "
+                 "<binary string> <tap number>"
+              << std::endl;
+    std::cout << "Using alpha numeric password:" << std::endl;
+    std::cout << "PhotoMagic <input file name> <output file name> "
+                 "-p <password string> <tap number>"
+              << std::endl;
 }
-
-std::string convert_to_binary(std::string);
 
 int main(int argc, char *argv[]) {
-  if (argc < 5) {
-    show_usage();
-    return EXIT_FAILURE;
-  }
-
-  std::string init_seed;
-  int tap = atoi(argv[4]);
-
-  // This means they are using a alphanumeric password
-  if (strcmp(argv[3], "-p") == 0) {
-    if (strlen(argv[4]) > 16) {
-      std::cout << "The length of the password must be less "
-                   "or equal to 16 characters."
-                << std::endl;
-      show_usage();
-      return EXIT_FAILURE;
+    if (argc < 5) {
+        show_usage();
+        return EXIT_FAILURE;
     }
 
-    // Convert the password to binary
-    init_seed = convert_to_binary(argv[4]);
-  } else {
-    // Initialize the seed to the binary string from argument
-    init_seed = argv[3];
-  }
+    std::string init_seed;
+    int tap = atoi(argv[4]);
 
-  sf::Image input_file, out_file;
-  sf::Texture input_texture, output_texture;
-  sf::Sprite input_sprite, output_sprite;
+    // This means they are using an alphanumeric password
+    if (strcmp(argv[3], "-p") == 0) {
+        if (strlen(argv[4]) > 16) {
+            std::cout << "The length of the password must be less "
+                         "or equal to 16 characters."
+                      << std::endl;
+            show_usage();
+            return EXIT_FAILURE;
+        }
 
-  // Try to load the file from the passed argument,
-  // if fail, return EXIT_FAILURE
-  if (!input_file.loadFromFile(argv[1])) {
-    return EXIT_FAILURE;
-  }
+        // Convert the password to binary
+        init_seed = convert_to_binary(argv[4]);
+        //std::cout << "Binary seed: " << init_seed << std::endl;
 
-  photomagic
-      .cpp
-          // Load image to the texture object
-          input_texture.loadFromImage(input_file);
-  // Set the sprite with the texture of the input
-  input_sprite.setTexture(input_texture);
-
-  LFSR lsfr(init_seed, tap);
-
-  out_file = transform_image(input_file, lsfr);
-  output_texture.loadFromImage(out_file);
-  output_sprite.setTexture(output_texture);
-
-  // Get the size of the input image
-  sf::Vector2u input_size = input_file.getSize();
-
-  // Instanciate to RenderWindow with the size of the input image
-  sf::RenderWindow window_one(sf::VideoMode(input_size.x, input_size.y),
-                              "Input"),
-      window_two(sf::VideoMode(input_size.x, input_size.y), "Output");
-
-  // This vector holds the position for the output window,
-  // relative to the input window
-  sf::Vector2i win_two_position(
-      window_one.getPosition().x + input_file.getSize().x,
-      window_one.getPosition().y + input_file.getSize().y);
-
-  while (window_one.isOpen() && window_two.isOpen()) {
-    sf::Event event;
-    while (window_one.pollEvent(event)) {
-      if (event.type == sf::Event::Closed)
-        window_one.close();
-    }
-    while (window_two.pollEvent(event)) {
-      if (event.type == sf::Event::Closed)
-        window_two.close();
+    } else {
+        // Initialize the seed to the binary string from argument
+        init_seed = argv[3];
     }
 
-    window_one.clear(sf::Color::White);
-    window_one.draw(input_sprite);
-    window_one.display();
+    sf::Image input_file, out_file;
+    sf::Texture input_texture, output_texture;
+    sf::Sprite input_sprite, output_sprite;
 
-    window_two.setPosition(win_two_position);
-    window_two.clear(sf::Color::White);
-    window_two.draw(output_sprite);
-    window_two.display();
-  }
-  if (!out_file.saveToFile(argv[2])) {
-    return EXIT_FAILURE;
-  }
-  return 0;
+    // Try to load the file from the passed argument
+    if (!input_file.loadFromFile(argv[1])) {
+        return EXIT_FAILURE;
+    }
+
+    // Load image to the texture object
+    input_texture.loadFromImage(input_file);
+    // Set the sprite with the texture of the input
+    input_sprite.setTexture(input_texture);
+
+    // Initialize the LFSR
+    LFSR lsfr(init_seed, tap);
+
+    // Ask the user for a message to embed in the image
+    std::string message;
+    std::cout << "Enter a message to hide in the image: ";
+    std::getline(std::cin, message);
+
+    // Convert the message to binary
+    std::string binary_message = convert_to_binary(message);
+
+    // Transform the image and embed the message
+    out_file = transform_image(input_file, lsfr, binary_message);
+
+    // Save the output image with the hidden message
+    if (!out_file.saveToFile(argv[2])) {
+        return EXIT_FAILURE;
+    }
+    std::cout << "Image saved as " << argv[2] << std::endl;
+
+    // Optionally, extract the hidden message to verify
+    std::string extracted_message = extract_message_from_image(out_file, message.length());
+    std::cout << "Extracted message: " << extracted_message << std::endl;
+
+    return 0;
 }
 
-sf::Image transform_image(sf::Image img, LFSR lsfr) {
-  sf::Color p;
+// Transform the image using LFSR and embed the message into the LSB of the pixels
+sf::Image transform_image(sf::Image img, LFSR lsfr, const std::string &binary_message) {
+    sf::Color p;
+    size_t message_index = 0;
+    size_t message_length = binary_message.length();
 
-  for (int y = 0; y < img.getSize().y; y++) {
-    for (int x = 0; x < img.getSize().x; x++) {
-      p = img.getPixel(x, y);
-      p.r = lsfr.generate(8) ^ p.r;
-      p.g = lsfr.generate(8) ^ p.g;
-      p.b = lsfr.generate(8) ^ p.b;
-      photomagic.cpp Tue Feb 26 10 : 28 : 49 2019 3 img.setPixel(x, y, p);
+    int lfsr_call_count = 0;  // Counter for LFSR calls
+
+    for (unsigned int y = 0; y < img.getSize().y && message_index < message_length; y++) {
+        for (unsigned int x = 0; x < img.getSize().x && message_index < message_length; x++) {
+            p = img.getPixel(x, y);
+
+            // **First, embed the message bits into the LSBs**
+            if (message_index < message_length) {
+                p.r = (p.r & ~1) | (binary_message[message_index++] - '0');
+            }
+            if (message_index < message_length) {
+                p.g = (p.g & ~1) | (binary_message[message_index++] - '0');
+            }
+            if (message_index < message_length) {
+                p.b = (p.b & ~1) | (binary_message[message_index++] - '0');
+            }
+
+            // **Then, apply LFSR encryption to the pixel**
+            int lfsr_value = lsfr.generate(8);
+            lfsr_call_count++;
+
+            p.r = lfsr_value ^ p.r;
+            p.g = lfsr_value ^ p.g;
+            p.b = lfsr_value ^ p.b;
+
+            img.setPixel(x, y, p);
+
+            if (message_index >= message_length) {
+                std::cout << "Message fully embedded at pixel (" << x << ", " << y << ")" << std::endl;
+                break;
+            }
+        }
     }
-  }
-  return img;
+
+    std::cout << "Total LFSR calls during encryption: " << lfsr_call_count << std::endl;
+
+    return img;
 }
 
-std::string convert_to_binary(std::string password_input) {
-  std::string binary_string;
-  for (std::size_t i = 0; i < password_input.length(); i++) {
-    binary_string.append(std::bitset<2>(password_input.c_str()[i]).to_string());
-  }
-  return binary_string;
+
+
+
+
+// Convert a string message to a binary representation
+std::string convert_to_binary(const std::string &input) {
+    std::string binary_string;
+    for (char c : input) {
+        binary_string.append(std::bitset<8>(c).to_string());
+    }
+    return binary_string;
+}
+
+// Extract the hidden message from the image
+std::string extract_message_from_image(sf::Image img, size_t message_length) {
+    std::string binary_message;
+    std::cout << message_length << std::endl;
+    binary_message.reserve(message_length * 8); // Reserve space for binary message
+
+    sf::Color p;
+
+    for (unsigned int y = 0; y < img.getSize().y; ++y) {
+        for (unsigned int x = 0; x < img.getSize().x; ++x) {
+            p = img.getPixel(x, y);
+
+            // Extract bits from the LSB of the RGB channels
+            binary_message.push_back((p.r & 1) + '0');
+            if (binary_message.size() >= message_length * 8) break;
+
+            binary_message.push_back((p.g & 1) + '0');
+            if (binary_message.size() >= message_length * 8) break;
+
+            binary_message.push_back((p.b & 1) + '0');
+            if (binary_message.size() >= message_length * 8) break;
+        }
+        if (binary_message.size() >= message_length * 8) break;
+    }
+
+    // Convert the binary string back to the original message
+    std::string message;
+    for (size_t i = 0; i < binary_message.length(); i += 8) {
+        std::bitset<8> char_bits(binary_message.substr(i, 8));
+        message.push_back(static_cast<char>(char_bits.to_ulong()));
+    }
+
+    return message;
 }
